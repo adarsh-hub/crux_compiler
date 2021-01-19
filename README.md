@@ -1,2 +1,2 @@
-# cs142a_compilers
-CS 14A - Compilers and Interpreters Project
+# CS 14A - Compilers and Interpreters Project
+### Adarsh B. Shankar
