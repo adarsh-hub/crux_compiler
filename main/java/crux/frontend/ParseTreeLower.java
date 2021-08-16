@@ -1,5 +1,6 @@
 package crux.frontend;
 
+import com.sun.jdi.CharType;
 import crux.frontend.ast.*;
 import crux.frontend.ast.OpExpr.Operation;
 import crux.frontend.ast.traversal.NodeVisitor;
@@ -62,13 +63,10 @@ public final class ParseTreeLower {
      * */
     //declaration-list := { declaration } .
     public DeclarationList lower(CruxParser.ProgramContext program) {
-        int line_number = program.start.getLine();
         String str = program.start.getText();
         //for debugging
 
         List<Declaration> dcLst = new ArrayList<>();
-
-        List<ParseTree> pt = program.children;
 
         CruxParser.DeclarationListContext newDL = program.declarationList();
         var newDCTX = newDL.declaration();
@@ -88,8 +86,7 @@ public final class ParseTreeLower {
             }
         }
 
-        DeclarationList declarations = new DeclarationList(makePosition(program), dcLst);
-        return declarations;
+        return new DeclarationList(makePosition(program), dcLst);
     }
     /**
      * Lower statement list by lower individual statement into AST.
@@ -102,7 +99,7 @@ public final class ParseTreeLower {
         Position test = makePosition(statementList);
         List<Statement> stmntLst = new ArrayList<>();
         Statement statement = null;
-        //statement := call-statement
+        // statement := call-statement
         //           | variable-declaration
         //           | assignment-statement
         //           | if-statement
@@ -169,8 +166,17 @@ public final class ParseTreeLower {
         public VariableDeclaration visitVariableDeclaration(CruxParser.VariableDeclarationContext ctx) {
             String identifier = ctx.Identifier().getText();
             Position position = makePosition(ctx);
-            var type = (ctx.type().getText());
-            Symbol symb = new Symbol(identifier);
+            Type t = null;
+            var type = ctx.type();
+            if (type.getText().equals("int")) {
+                t = new IntType();
+            } else if (type.getText().equals("bool")) {
+                t = new BoolType();
+            }
+            Symbol symb = symTab.add(position, identifier, t);
+            System.out.println("Variable Dec add name: " + identifier);
+            System.out.println("Variable Dec add type: " + t.toString());
+            System.out.println("Variable Dec lookup: " + symTab.lookup(position,identifier).toString());
             VariableDeclaration variableDeclaration = new VariableDeclaration(position, symb);
             return  variableDeclaration;
         }
@@ -185,8 +191,17 @@ public final class ParseTreeLower {
         public Declaration visitArrayDeclaration(CruxParser.ArrayDeclarationContext ctx) {
             String identifier = ctx.Identifier().getText();
             Position position = makePosition(ctx);
-            var type = (ctx.type().getText());
-            Symbol symb = new Symbol(identifier);
+            var intg = ctx.Integer();
+            Type t = null;
+            var type = ctx.type();
+            if (type.getText().equals("int")) {
+                t = new IntType();
+            } else if (type.getText().equals("bool")) {
+                t = new BoolType();
+            }
+
+            var arrtype = new ArrayType(Long.parseLong(intg.getText()), t);
+            Symbol symb = symTab.add(position, identifier, arrtype);
             ArrayDeclaration arrayDeclaration = new ArrayDeclaration(position, symb);
             return arrayDeclaration;
         }
@@ -200,29 +215,49 @@ public final class ParseTreeLower {
         //function-definition := "func" IDENTIFIER "(" parameter-list ")" ":" type statement-block .
         @Override
         public Declaration visitFunctionDefinition(CruxParser.FunctionDefinitionContext ctx) {
+
             String identifier = ctx.Identifier().getText();
 
-            CruxParser.ParameterListContext plc = ctx.parameterList();
-            List<CruxParser.ParameterContext> param_list = plc.parameter();
+            var plc = ctx.parameterList();
+            var param_list = plc.parameter();
+            var tl = new TypeList();
             //PARSING PARAMETER LIST
-
             List<Symbol> parameters = new ArrayList<>();
-            for(CruxParser.ParameterContext pc : param_list)
-            {
-                String param = pc.Identifier().getText();
-                Symbol param_sym = new Symbol(param);
-                parameters.add(param_sym);
-            }
-
+            Type t = null;
+            for (CruxParser.ParameterContext pc : param_list) {
+                    System.out.println("getting all parameters");
+                    String param = pc.Identifier().getText();
+                    if (pc.type().getText().equals("int")) {
+                        t = new IntType();
+                        tl.append(t);
+                    } else if (pc.type().getText().equals("bool")) {
+                        t = new BoolType();
+                        tl.append(t);
+                    } else if (pc.type().getText().equals("void")) {
+                        t = new VoidType();
+                        tl.append(t);
+                    } else {
+                        t = new BoolType();
+                    }
+                    Symbol param_sym = symTab.add(makePosition(pc), param, t);
+                    parameters.add(param_sym);
+                }
             //PARSING STATEMENT BLOCK
             CruxParser.StatementBlockContext sbc = ctx.statementBlock();
             CruxParser.StatementListContext slc = sbc.statementList();
-
-            Position position_f = makePosition(ctx);
-            Position position_s = makePosition(ctx.statementBlock().statementList());
-            Symbol symb = new Symbol(identifier);
+            Position position = makePosition(ctx);
+            Type t1 = null;
+            if (ctx.type().getText().equals("int")) {
+                t1 = new IntType();
+            } else if (ctx.type().getText().equals("bool")) {
+                t1 = new BoolType();
+            } else if (ctx.type().getText().equals("void")) {
+                t1 = new VoidType();
+            }
+            Symbol symb = symTab.add(position, identifier, new FuncType(tl, t1));
             StatementList new_statementList = lower(slc);
-            FunctionDefinition functionDefinition = new FunctionDefinition(position_f, symb, parameters, new_statementList);
+            FunctionDefinition functionDefinition = new FunctionDefinition(position, symb, parameters, new_statementList);
+
             return functionDefinition;
         }
 
@@ -257,8 +292,7 @@ public final class ParseTreeLower {
             var des = ctx.designator();
             var location = locationVisitor.visitDesignator(des);
             var value = expressionVisitor.visitExpression0(ctx.expression0());
-            Assignment assignment = new Assignment(makePosition(ctx),location,value);
-            return assignment;
+            return new Assignment(makePosition(ctx),location,value);
         }
 
 
@@ -274,8 +308,7 @@ public final class ParseTreeLower {
         @Override
         public Statement visitCallStatement(CruxParser.CallStatementContext ctx) {
             var expctx = ctx.callExpression();
-            var call = expressionVisitor.visitCallExpression(expctx);
-            return call;
+            return expressionVisitor.visitCallExpression(expctx);
         }
 
 
@@ -354,8 +387,10 @@ public final class ParseTreeLower {
         public Expression visitExpression0(CruxParser.Expression0Context ctx) {
             var exp1 = ctx.expression1();
             Operation op0 = null;
+            Expression expLeft = null;
+            expLeft = visitExpression1(ctx.expression1(0));
+
             if(ctx.op0()!=null){
-                var expLeft = visitExpression1(ctx.expression1(0));
                 var expRight = visitExpression1(ctx.expression1(1));
                 String op = ctx.op0().getText();
                 if(op.equals(">=")){
@@ -384,79 +419,52 @@ public final class ParseTreeLower {
                 }
             }
 
-            Expression exp = null;
-            for(var item : exp1){
-                exp = visitExpression1(item);
-            }
-            return exp;
+            return expLeft;
         }
 
         //expression1 := expression2 { op1  expression2 } .
         //op1 := "+" | "-" | "or" .
         @Override
         public Expression visitExpression1(CruxParser.Expression1Context ctx) {
-            var exp2 = ctx.expression2();
-            Operation oper1 = null;
-            Expression exp = null;
-            int exp2size = exp2.size();
-            if(exp2.size()==1){return visitExpression2(ctx.expression2(0));}
+            var exp2 = visitExpression2(ctx.expression2(0));
 
-            for(int i = 0; i <= exp2size; i++){
-                var expLeft = visitExpression2(exp2.get(i));
-                if(ctx.op1()!=null) {
-                    for (var op : ctx.op1()) {
-                        String op1 = op.getText();
-                        if(op1.equals("+")){
-                            oper1 = Operation.ADD;
-                            return new OpExpr(makePosition(ctx), oper1, expLeft, visitExpression2(exp2.get(i+1)));
-                        }
-                        else if(op1.equals("-")){
-                            oper1 = Operation.SUB;
-                            return new OpExpr(makePosition(ctx), oper1, expLeft, visitExpression2(exp2.get(i+1)));
-                        }
-                        else if(op1.equals("or")){
-                            oper1 = Operation.LOGIC_OR;
-                            return new OpExpr(makePosition(ctx), oper1, expLeft, visitExpression2(exp2.get(i+1)));
-                        }
+            if(ctx.expression2().size() > 1) {
+                for (int i = 0; i < ctx.op1().size(); i++) {
+                    var expLeft = visitExpression2(ctx.expression2(i+1));
+                    var op1 = ctx.op1(i);
+                    if (op1.Add() != null) {
+                        exp2 = new OpExpr(makePosition(ctx), Operation.ADD, exp2, expLeft);
+                    } else if (op1.Sub() != null) {
+                        exp2 = new OpExpr(makePosition(ctx), Operation.SUB, exp2, expLeft);
+                    } else if (op1.Or() != null) {
+                        exp2 = new OpExpr(makePosition(ctx), Operation.LOGIC_OR, exp2, expLeft);
                     }
                 }
             }
-
-            return exp;
+            return exp2;
         }
 
-
+        //Refactor to stage 2
         //expression2 := expression3 { op2 expression3 } .
         //op2 := "*" | "/" | "and" .
         @Override
         public Expression visitExpression2(CruxParser.Expression2Context ctx) {
-            var exp2 = ctx.expression3();
+            var exp3 = visitExpression3(ctx.expression3(0));
 
-            Expression exp = null;
-            Operation oper2 = null;
-            int exp3size = exp2.size();
-            if(exp3size == 1){return visitExpression3(ctx.expression3(0));}
-            for(int i = 0; i <= exp3size; i++){
-                var expLeft = visitExpression3(exp2.get(i));
-                if(ctx.op2()!=null){
-                    for(var op : ctx.op2()){
-                        String op1 = op.getText();
-                        if(op1.equals("*")){
-                            oper2 = Operation.MULT;
-                            return new OpExpr(makePosition(ctx), oper2, expLeft, visitExpression3(exp2.get(i+1)));
-                        }
-                        else if(op1.equals("/")){
-                            oper2 = Operation.DIV;
-                            return new OpExpr(makePosition(ctx), oper2, expLeft, visitExpression3(exp2.get(i+1)));
-                        }
-                        else if(op1.equals("and")){
-                            oper2 = Operation.LOGIC_AND;
-                            return new OpExpr(makePosition(ctx), oper2, expLeft, visitExpression3(exp2.get(i+1)));
-                        }
+            if(ctx.expression3().size()>1){
+                for(int i = 0; i< ctx.op2().size(); i++){
+                    var exp3left = visitExpression3(ctx.expression3(i+1));
+                    var op2 = ctx.op2(i);
+                    if(op2.Mul() != null){
+                        exp3 = new OpExpr(makePosition(ctx), Operation.MULT, exp3, exp3left);
+                    } else if(op2.Div() != null){
+                        exp3 = new OpExpr(makePosition(ctx), Operation.DIV, exp3, exp3left);
+                    }else if(op2.And() != null){
+                        exp3 = new OpExpr(makePosition(ctx), Operation.LOGIC_AND, exp3, exp3left);
                     }
                 }
             }
-            return exp;
+            return exp3;
         }
 
         //expression3 := "not" expression3| "(" expression0 ")"| designator| call-expression| literal .
@@ -489,7 +497,14 @@ public final class ParseTreeLower {
         @Override
         public Call visitCallExpression(CruxParser.CallExpressionContext ctx) {
             String identifier = ctx.Identifier().getText();
-            Symbol symb = new Symbol(identifier);
+            Symbol symb = null;
+            if (identifier.equals("printInt")||identifier.equals("printBool")||identifier.equals("println")||identifier.equals("printChar")||identifier.equals("readInt")||identifier.equals("readChar")) {
+                symb = symTab.lookup(makePosition(ctx), identifier);
+            }
+            else {
+                symb = symTab.lookup(makePosition(ctx),identifier);
+                System.out.println("Call symblookup: " + symb.toString());
+            }
             Position position = makePosition(ctx);
             List<CruxParser.Expression0Context> list = ctx.expressionList().expression0();
             List<Expression> explst = new ArrayList<>();
@@ -508,20 +523,24 @@ public final class ParseTreeLower {
         public Expression visitDesignator(CruxParser.DesignatorContext ctx) {
             String identifier = ctx.Identifier().getText();
             Position pos = makePosition(ctx);
-            Symbol symb = new Symbol(identifier);
-            Name name = new Name(pos, symb);
+            //having trouble getting the type from the context object
+            Symbol symb = symTab.lookup(new Position(420), identifier);
+            var type = symb.getType();
             if(ctx.OpenBracket()!=null && ctx.CloseBracket()!=null)
             {
+                Name name2 = new Name(pos, symb);
                 Expression exp = visitExpression0(ctx.expression0());
-                ArrayAccess aa = new ArrayAccess(pos,name,exp);
+                ArrayAccess aa = new ArrayAccess(pos,name2,exp);
                 if(this.dereferenceDesignator){
                     return new Dereference(pos,aa);
                 }
                 return aa;
             }
             if(this.dereferenceDesignator){
-                return new Dereference(pos,name);
+                Name name2 = new Name(pos, symb);
+                return new Dereference(pos,name2);
             }
+            Name name = new Name(pos, symb);
             return name;
         }
 

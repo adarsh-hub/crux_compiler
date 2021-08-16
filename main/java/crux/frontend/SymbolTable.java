@@ -17,7 +17,31 @@ final class SymbolTable {
 
     SymbolTable(PrintStream err) {
         this.err = err;
-        // TODO
+        Symbol new_symbol1 = new Symbol("readInt", new FuncType(TypeList.of(), new IntType()));
+        Symbol new_symbol2 = new Symbol("readChar", new FuncType(TypeList.of(), new IntType()));
+        Symbol new_symbol3 = new Symbol("printBool", new FuncType(TypeList.of(new BoolType()), new VoidType()));
+        Symbol new_symbol4 = new Symbol("printInt", new FuncType(TypeList.of(new IntType()), new VoidType()));
+        Symbol new_symbol5 = new Symbol("printChar", new FuncType(TypeList.of(new IntType()), new VoidType()));
+        Symbol new_symbol6 = new Symbol("println", new FuncType(TypeList.of(), new VoidType()));
+        HashMap<String, Symbol> hm1 = new HashMap<>();
+        HashMap<String, Symbol> hm2 = new HashMap<>();
+        HashMap<String, Symbol> hm3 = new HashMap<>();
+        HashMap<String, Symbol> hm4 = new HashMap<>();
+        HashMap<String, Symbol> hm5 = new HashMap<>();
+        HashMap<String, Symbol> hm6 = new HashMap<>();
+        hm1.put("readInt", new_symbol1);
+        hm2.put("readChar", new_symbol2);
+        hm3.put("printBool", new_symbol3);
+        hm4.put("printInt", new_symbol4);
+        hm5.put("printChar", new_symbol5);
+        hm6.put("println", new_symbol6);
+        this.symbolScopes.add(hm1);
+        this.symbolScopes.add(hm2);
+        this.symbolScopes.add(hm3);
+        this.symbolScopes.add(hm4);
+        this.symbolScopes.add(hm5);
+        this.symbolScopes.add(hm6);
+
     }
 
     boolean hasEncounteredError() {
@@ -25,21 +49,48 @@ final class SymbolTable {
     }
 
     void enter() {
-        // TODO
+        HashMap<String, Symbol> hm = new HashMap<>();
+        symbolScopes.add(hm);
     }
 
     void exit() {
-        // TODO
+        symbolScopes.remove(symbolScopes.size() - 1);
     }
 
-    Symbol add(Position pos, String name) {
-        // TODO
-        return null;
+    Symbol add(Position pos, String name) { //pos: line number in crux name: name of the symbol
+        HashMap<String, Symbol> hm = new HashMap<>();
+        Symbol s = new Symbol(name);
+        hm.put(name, s);
+        if(!symbolScopes.contains(hm))
+        {
+            symbolScopes.add(hm);
+        }
+        else
+        {
+            symbolScopes.remove(hm);
+            symbolScopes.add(hm);
+        }
+        return s;
     }
 
     Symbol add(Position pos, String name, Type type) {
-        // TODO
-        return null;
+        HashMap<String, Symbol> hm = new HashMap<>();
+        Symbol s = new Symbol(name, type);
+        hm.put(name, s);
+        symbolScopes.add(hm);
+        if(!symbolScopes.contains(hm))
+        {
+            symbolScopes.add(hm);
+        }//Report an error
+        else
+        {
+            var rem_s = find(name);
+            HashMap<String, Symbol> hm2 = new HashMap<>();
+            hm2.put(name, rem_s);
+            symbolScopes.remove(hm2);
+            symbolScopes.add(hm);
+        }
+        return s;
     }
 
     Symbol lookup(Position pos, String name) {
@@ -53,8 +104,12 @@ final class SymbolTable {
         }
     }
 
-    private Symbol find(String name) {
-        // TODO
+    private Symbol find(String name) { //check the most recent scope
+        for(Map<String, Symbol> node : symbolScopes){
+            if(node.containsKey(name)){
+                return node.get(name);
+            }
+        }
         return null;
     }
 }
