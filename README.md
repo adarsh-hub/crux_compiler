@@ -1,2 +1,2 @@
-# CS 142A - Compilers and Interpreters Project
+# Compilers Project
 ### Adarsh B. Shankar
